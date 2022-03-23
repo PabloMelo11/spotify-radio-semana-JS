@@ -1,3 +1,4 @@
+import { once } from 'events';
 import { logger } from './util.js';
 import config from './config.js';
 
@@ -41,6 +42,16 @@ async function routes(request, response) {
     });
 
     return stream.pipe(response);
+  }
+
+  if (method === 'POST' && url === '/controller') {
+    const data = await once(request, 'data');
+
+    const item = JSON.parse(data);
+
+    const result = await controller.handleCommand(item);
+
+    return response.end(JSON.stringify(result));
   }
 
   if (method === 'GET') {

@@ -19,8 +19,6 @@ export class Service {
     this.currentBitRate = 0;
     this.throttleTransform = {};
     this.currentReadable = {};
-
-    this.startStreaming();
   }
 
   createClientStream() {
@@ -79,6 +77,10 @@ export class Service {
       throttleTransform,
       this.broadCast()
     );
+  }
+
+  async stopStreaming() {
+    this.throttleTransform?.end?.();
   }
 
   async getBitRate(song) {
