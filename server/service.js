@@ -1,6 +1,6 @@
 import fs from 'fs';
 import fsPromise from 'fs/promises';
-import { join, extname } from 'path';
+import path, { join, extname } from 'path';
 import { randomUUID } from 'crypto';
 import { PassThrough, Writable } from 'stream';
 import streamPromises from 'stream/promises';
@@ -133,5 +133,68 @@ export class Service {
       stream: this.createFileStream(name),
       type,
     };
+  }
+
+  async readFxByName(fxName) {
+    const songs = await fsPromise.readdir(config.dir.fxDirectory);
+
+    const chosenSong = songs.find((filename) =>
+      filename.toLowerCase().includes(fxName)
+    );
+
+    if (!chosenSong) {
+      return Promise.reject(`the song ${fxName} wasn't found!`);
+    }
+
+    return path.join(config.dir.fxDirectory, chosenSong);
+  }
+
+  appendFxStream(fx) {
+    const throttleTransformable = new Throttle(this.currentBitRate);
+
+    streamPromises.pipeline(throttleTransformable, this.broadCast());
+
+    const unpipe = () => {
+      const transformStream = this.mergeAudioStream(fx, this.currentReadable);
+      this.throttleTransform = throttleTransformable;
+      this.currentReadable = transformStream;
+      this.currentReadable.removeListener('unpipe', unpipe);
+
+      streamPromises.pipeline(transformStream, throttleTransformable);
+    };
+
+    this.throttleTransform.on('unpipe', unpipe);
+
+    this.throttleTransform.pause();
+    this.currentReadable.unpipe(this.throttleTransform);
+  }
+
+  mergeAudioStream(song, readable) {
+    const transformStream = PassThrough();
+
+    const args = [
+      '-t',
+      config.constants.audioMediaType,
+      '-v',
+      config.constants.songVolume,
+      '-m',
+      '-',
+      '-t',
+      config.constants.audioMediaType,
+      '-v',
+      config.constants.fxVolume,
+      song,
+      '-t',
+      config.constants.audioMediaType,
+      '-',
+    ];
+
+    const { stdout, stdin } = this._executeSoxCommand(args);
+
+    streamPromises.pipeline(readable, stdin);
+
+    streamPromises.pipeline(stdout, transformStream);
+
+    return transformStream;
   }
 }
